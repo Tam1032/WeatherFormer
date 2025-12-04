@@ -1,0 +1,9 @@
+transformers
+datasets
+gradio
+requests
+re
+torch
+ollama
+peft
+bitsandbytes
