@@ -1,0 +1,6 @@
+services:
+  vllm:
+    command: ["/models/weatherformer-awq", "--served-model-name", "weather",
+              "--max-model-len", "2048", "--gpu-memory-utilization", "0.90"]
+    volumes:
+      - ./models:/models

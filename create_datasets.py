@@ -6,7 +6,7 @@ import json
 import ollama
 from typing import List, Dict
 
-from utils import get_weather
+from weatherformer.legacy_utils import get_weather
 
 # ==============================
 # CONFIG
