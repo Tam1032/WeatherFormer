@@ -6,12 +6,12 @@ from datasets import Dataset
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
+    BitsAndBytesConfig,
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling
 )
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-import bitsandbytes as bnb
 
 # ----------------------------
 # 1. Load your filtered data (Q:/A: format)
@@ -50,14 +50,17 @@ def create_model_and_tokenizer():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.float16,
-        device_map="auto",
+    bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_use_double_quant=True,
         bnb_4bit_quant_type="nf4",
         bnb_4bit_compute_dtype=torch.float16,
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        dtype=torch.float16,
+        device_map="auto",
+        quantization_config=bnb_config,
         trust_remote_code=True,  # Required for Qwen
     )
 
@@ -85,7 +88,7 @@ def create_model_and_tokenizer():
 # ----------------------------
 
 def main():
-    data_path = "filtered_data.txt"          # Your filtered file
+    data_path = "data/filtered_data.txt"
     output_dir = "./lora-toolformer-qwen2-7b"
     os.makedirs(output_dir, exist_ok=True)
 
@@ -125,7 +128,7 @@ def main():
         fp16=True,
         optim="paged_adamw_8bit",
         lr_scheduler_type="cosine",
-        warmup_ratio=0.03,
+        warmup_steps=0.03,  # transformers 5: a float < 1 is a ratio (was warmup_ratio)
         report_to="none",
         gradient_checkpointing=True,
     )
@@ -134,7 +137,7 @@ def main():
         model=model,
         args=training_args,
         train_dataset=tokenized_dataset,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
     )
 

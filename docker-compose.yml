@@ -1,0 +1,60 @@
+services:
+  vllm:
+    image: vllm/vllm-openai:v0.32.0   # same version as the one tested in step 3
+    command:
+      - Qwen/Qwen2-7B
+      - --enable-lora
+      - --lora-modules
+      - weather=${ADAPTER_ID}
+      - --max-lora-rank
+      - "64"
+      - --max-model-len
+      - "2048"
+      - --gpu-memory-utilization
+      - "0.90"
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      VLLM_USE_FLASHINFER_SAMPLER: "0"   # greedy decoding; skips the FlashInfer JIT build
+    volumes:
+      - ${HF_HOME:-${HOME}/.cache/huggingface}:/root/.cache/huggingface
+    ports:
+      - "8000:8000"
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_ID:-0}"]   # index as shown by nvidia-smi
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 60
+      start_period: 120s
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      VLLM_URL: http://vllm:8000
+      MODEL_NAME: weather
+      WEATHER_CACHE_TTL_S: ${WEATHER_CACHE_TTL_S:-600}
+    ports:
+      - "8080:8080"
+    depends_on:
+      vllm:
+        condition: service_healthy
+
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    environment:
+      API_URL: http://api:8080
+    ports:
+      - "7860:7860"
+    depends_on:
+      - api
